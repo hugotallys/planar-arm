@@ -6,7 +6,7 @@ using InteractiveUtils
 
 # ╔═╡ 20991bad-91f3-4e0c-8be1-01b7d4c1285d
 begin
-	using Plots, LinearAlgebra
+	using Plots, LinearAlgebra, Printf
 end
 
 # ╔═╡ 1d090c42-6842-42f2-9330-87cb0e764f76
@@ -82,9 +82,9 @@ begin
 	a3 = 1.0
 
 	# Ângulos das juntas
-	q1 = π/2
-	q2 = π/3
-	q3 = -π/2
+	q1 = π / 2
+	q2 = -π / 2
+	q3 = 0
 
 	# Vetor de configuração
 	q = [q1, q2, q3]
@@ -265,27 +265,50 @@ end
 
 # ╔═╡ 17f7811d-62fa-460f-a8d7-2b70a63eab5f
 md"""
+## Parte III
 ### Elipsoide de Manipulabilidade
 
-O elipsoide de manipulabilidade é uma representação gráfica que mostra a capacidade de um manipulador de se mover em diferentes direções no espaço de trabalho. Ele é determinado pelo Jacobiano $J$ do manipulador e seus valores singulares, que definem o tamanho e a orientação do elipsoide.
-
-Dado o Jacobiano $J$, podemos definir o elipsoide de manipulabilidade em torno da posição do efetuador, indicando as direções e magnitudes de movimento possíveis.
-
-Matematicamente, o elipsoide de manipulabilidade é definido pela condição de que:
+O elipsóide de manipulabilidade é definido pela equação:
 
 $$\xi^T (J J^T)^{-1} \xi \leq 1$$
 
-onde $\xi$ é a velocidade do efetuador. Essa desigualdade descreve uma forma elíptica no espaço de velocidades, onde o comprimento dos eixos do elipsoide é dado pelos valores singulares de $J$, e as direções dos eixos principais são dadas pelas colunas de $U$.
+Decompondo $JJ^T$ com SVD, temos:
 
+$$\begin{align}
+JJ^T &=(U \Sigma V^T)(U \Sigma V^T)^T \\
+JJ^T &=(U \Sigma V^T)(V \Sigma U^T) \\
+JJ^T &=U \Sigma^2 U^T
+\end{align}$$
+
+Substituindo na equação anterior:
+
+$$\begin{align}
+\xi^T (U \Sigma^2 U^T)^{-1} \xi \leq 1 \\ 
+\xi^T (U^T \Sigma^{-2} U) \xi \leq 1 \\
+(U \xi)^T \Sigma^{-2} (U \xi) \leq 1
+\end{align}$$
+
+Reescrevendo $w=U\xi$ (mudança de coordenadas), obtemos:
+
+$$w^T\Sigma^{-2}w\leq1$$
+
+E expandindo:
+
+$$\begin{bmatrix} w_1 & w_2 \end{bmatrix} \begin{bmatrix} \sigma_1^{-2} & 0 \\ 0 & \sigma_2^{-2} \end{bmatrix} \begin{bmatrix} w_1 \\ w_2 \end{bmatrix} \leq 1$$
+
+
+o que resulta em:
+
+$$\frac{w_1^2}{\sigma_1^2} + \frac{w_2^2}{\sigma_2^2} \leq 1$$
 """
 
 # ╔═╡ 1e635e6b-f516-45da-9637-b9ddb7a5472b
 md"""
 A **medida de manipulabilidade** quantifica o volume do elipsoide de manipulabilidade e indica a capacidade do robô de se mover livremente em diferentes direções no espaço de trabalho. A medida é dada por:
 
-$$\mu = \sigma_1 \sigma_2 \sigma_3$$
+$$\mu = \sigma_1 \sigma_2$$
 
-onde $\sigma_i$ são os valores singulares de $J$. Um valor maior de $\mu$ implica em uma maior flexibilidade de movimento no espaço de trabalho.
+onde $\sigma_i$ são os valores singulares de $J$ (diferentes de zero). Um valor maior de $\mu$ implica em uma maior flexibilidade de movimento no espaço de trabalho.
 """
 
 # ╔═╡ 854a6817-2a37-456d-bc80-20f9f59dbe68
@@ -296,50 +319,50 @@ begin
 	end
 	
 	man = manipulability(J)
-	"Medida de Manipulabilidade: $man"
+	md"### μ = $(@sprintf(\"%.4f\", man))"
 end
 
+# ╔═╡ 7a08b139-47d4-4280-88d5-29169dee0478
+md"Visualizando o elipsóide de manipulabilidade:"
+
 # ╔═╡ 1ab070fb-fe83-44ca-9f7b-9a4a7a7ddfbd
-# Função para calcular e adicionar o elipsoide de manipulabilidade e os eixos principais
-function plot_manipulability_ellipsoid!(J, end_effector_position)
-    # Realiza a decomposição SVD
+function plot_manipulability_ellipsoid!(J, xef, yef)
     U, Σ, _ = svd(J)
-    
-    # Configura os parâmetros do elipsoide com os valores singulares
+
+	# Criando pontos do elipsóide
     θ = range(0, stop=2π, length=100)
     ellipse_x = Σ[1] * cos.(θ)
     ellipse_y = Σ[2] * sin.(θ)
-    ellipsoid_points = hcat(ellipse_x, ellipse_y) * U'  # Aplica a matriz de rotação U
-    
-    # Desloca o elipsoide para a posição do efetuador
-    x_start, y_start = end_effector_position
+    ellipsoid_points = hcat(ellipse_x, ellipse_y) * U'  
+	
     plot!(
-        ellipsoid_points[:, 1] .+ x_start, ellipsoid_points[:, 2] .+ y_start, 
-        seriestype=:path, label="Elipsoide de Manipulabilidade", color=:green
+        ellipsoid_points[:, 1] .+ xef,
+		ellipsoid_points[:, 2] .+ yef, 
+        seriestype=:path,
+		label="Elipsóide de Manipulabilidade", color=:green
     )
     
-    # Eixos principais (eixos de manobra)
+    # Plotando eixos principais
     quiver!(
-        [x_start], [y_start], 
+        [xef], [yef], 
         quiver=([Σ[1] * U[1, 1]], [Σ[1] * U[2, 1]]), 
         label="Eixo Principal 1", color=:red
     )
     quiver!(
-        [x_start], [y_start], 
+        [xef], [yef], 
         quiver=([Σ[2] * U[1, 2]], [Σ[2] * U[2, 2]]), 
         label="Eixo Principal 2", color=:blue
     )
     
     xlabel!("Posição X")
     ylabel!("Posição Y")
-    title!("Braço Plano e Elipsoide de Manipulabilidade")
+    title!(@sprintf("Manipulabilidade μ=%.4f", man))
 end
-
 
 # ╔═╡ 8dc2224a-eb02-440f-87ef-6b1b36535c28
 begin
     plot_arm(q)
-    plot_manipulability_ellipsoid!(J, (x3, y3))
+    plot_manipulability_ellipsoid!(J, x3, y3)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -347,6 +370,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [compat]
 Plots = "~1.38.16"
@@ -358,7 +382,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.5"
 manifest_format = "2.0"
-project_hash = "8eb1731fe876814116bed7af264c7d0d87a62b45"
+project_hash = "050db889c760fdac1e7dbdb4c4aee5e63588f6ef"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -1386,9 +1410,10 @@ version = "1.4.1+0"
 # ╠═08deb6fd-656f-4ebb-946c-d5a5b64514cf
 # ╟─74ad22c8-dd7b-4cfe-b4b5-1a826d63cff8
 # ╠═bcc69588-b55b-4e7c-9704-2897839ed59e
-# ╠═17f7811d-62fa-460f-a8d7-2b70a63eab5f
+# ╟─17f7811d-62fa-460f-a8d7-2b70a63eab5f
 # ╟─1e635e6b-f516-45da-9637-b9ddb7a5472b
 # ╠═854a6817-2a37-456d-bc80-20f9f59dbe68
+# ╟─7a08b139-47d4-4280-88d5-29169dee0478
 # ╠═1ab070fb-fe83-44ca-9f7b-9a4a7a7ddfbd
 # ╠═8dc2224a-eb02-440f-87ef-6b1b36535c28
 # ╟─00000000-0000-0000-0000-000000000001
